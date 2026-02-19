@@ -223,6 +223,12 @@ def public_state(g: dict, player_id: str | None = None) -> dict:
 
 # --- Routes ---
 
+@app.route("/health")
+def health():
+    """Simple health check for Render and debugging."""
+    return "ok", 200
+
+
 @app.route("/")
 def index():
     return render_template("index.html")

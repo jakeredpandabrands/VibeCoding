@@ -26,7 +26,7 @@ Open http://localhost:5000 (or http://YOUR_IP:5000 for others on your WiFi).
 4. Connect your GitHub repo. If cool-stuff is a subfolder (e.g. in VibeCoding), set **Root Directory** to `cool-stuff`.
 5. Settings:
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT`
+   - **Start Command:** `gunicorn app:app -c gunicorn_config.py`
 6. Click **Create Web Service**. First deploy takes ~2 min.
 7. Your app will be at `https://your-app-name.onrender.com`.
 

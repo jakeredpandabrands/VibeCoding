@@ -1,5 +1,12 @@
 # Deploy COOL STUFF to Render
 
+## Fixes applied (for blank page / no response)
+
+- **gunicorn_config.py** — Binds to `0.0.0.0:PORT` (reads from env; Render sets PORT=10000)
+- **runtime.txt** — Pins Python 3.12
+- **/health** — Simple health check endpoint
+- **Start command** — Use `gunicorn app:app -c gunicorn_config.py` (avoid $PORT shell expansion issues)
+
 ## 1. Push to GitHub
 
 From the VibeCoding repo root:
@@ -26,7 +33,7 @@ git push -u origin main
    - **Root Directory:** `cool-stuff`
    - **Runtime:** Python 3
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT`
+   - **Start Command:** `gunicorn app:app -c gunicorn_config.py`
 6. **Create Web Service**
 
 First deploy takes ~2 minutes. You'll get a URL like `https://cool-stuff-xxxx.onrender.com`.
