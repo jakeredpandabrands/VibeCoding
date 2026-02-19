@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Be the Better Deal</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Be the Better Deal</h1>
+      <p class="tagline">Track your product vs competitors on Amazon</p>
+    </header>
+
+    <section class="form-card">
+      <form method="POST" action="{{ url_for('run_check') }}">
+        <div class="field">
+          <label for="your_asin">Your product ASIN</label>
+          <input type="text" id="your_asin" name="your_asin" placeholder="B08N5WRWNW"
+                 pattern="[A-Za-z0-9]{10}" maxlength="10" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="competitor_asins">Competitor ASINs</label>
+          <textarea id="competitor_asins" name="competitor_asins" rows="4"
+                    placeholder="One per line or comma-separated&#10;B07XYZ123&#10;B09ABC456"></textarea>
+          <span class="hint">Paste ASINs — we'll extract them</span>
+        </div>
+        <button type="submit" class="btn-run">Run check</button>
+      </form>
+    </section>
+
+    {% if runs %}
+    <section class="recent-runs">
+      <h2>Recent runs</h2>
+      <ul>
+        {% for r in runs %}
+        <li>
+          <a href="{{ url_for('run_detail', run_id=r.id) }}">{{ r.triggered_at[:19] }} UTC</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>

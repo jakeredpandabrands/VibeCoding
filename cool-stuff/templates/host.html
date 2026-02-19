@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Host — COOL STUFF!</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container host-view">
+    <header>
+      <h1>COOL STUFF!</h1>
+      <p class="tagline">Host view — Game {{ game_id }}</p>
+    </header>
+
+    <div id="app">
+      <div id="lobby" class="card hidden">
+        <h2>Lobby</h2>
+        <p class="join-url">Players join at: <code id="join-url"></code></p>
+        <ul id="player-list"></ul>
+        <button id="btn-start" class="btn-primary" disabled>Start Game</button>
+      </div>
+
+      <div id="round" class="card hidden">
+        <h2>Round <span id="round-num"></span> of <span id="round-total"></span></h2>
+        <div id="current-item" class="item-card">
+          <span class="item-name" id="item-name"></span>
+        </div>
+        <p id="phase-label"></p>
+        <p id="submitted-count"></p>
+        <div class="host-actions">
+          <button id="btn-resolve" class="btn-secondary hidden">Resolve Round</button>
+          <button id="btn-next" class="btn-primary hidden">Next Round</button>
+        </div>
+      </div>
+
+      <div id="reveal" class="card hidden">
+        <h2>Result</h2>
+        <div class="reveal-card">
+          <span class="item-name" id="reveal-item-name"></span>
+          <span class="item-value" id="reveal-item-value"></span>
+          <p id="winner-text"></p>
+        </div>
+        <button id="btn-next-round" class="btn-primary">Next Round</button>
+      </div>
+
+      <div id="ended" class="card hidden">
+        <h2>Game Over!</h2>
+        <ul id="leaderboard"></ul>
+      </div>
+    </div>
+  </main>
+  <script>
+    const GAME_ID = "{{ game_id }}";
+    const API = `/api/game/${GAME_ID}`;
+
+    const lobby = document.getElementById("lobby");
+    const round = document.getElementById("round");
+    const reveal = document.getElementById("reveal");
+    const ended = document.getElementById("ended");
+
+    function show(el) { el.classList.remove("hidden"); }
+    function hide(el) { el.classList.add("hidden"); }
+
+    async function fetchState() {
+      const r = await fetch(`${API}/state`);
+      return r.json();
+    }
+
+    function render(state) {
+      const baseUrl = window.location.origin;
+      document.getElementById("join-url").textContent = `${baseUrl}/game/${GAME_ID}/join`;
+
+      if (state.phase === "lobby") {
+        show(lobby); hide(round); hide(reveal); hide(ended);
+        document.getElementById("player-list").innerHTML = state.players
+          .map(p => `<li>${escapeHtml(p.name)}</li>`).join("");
+        document.getElementById("btn-start").disabled = state.players.length < 2;
+      } else if (state.phase === "play") {
+        hide(lobby); show(round); hide(reveal); hide(ended);
+        document.getElementById("round-num").textContent = state.current_round + 1;
+        document.getElementById("round-total").textContent = state.rounds_total;
+        document.getElementById("item-name").textContent = state.current_item?.name || "—";
+        document.getElementById("phase-label").textContent = "Players are bidding...";
+        document.getElementById("submitted-count").textContent = 
+          `${state.submitted_count || 0}/${state.players.length} submitted`;
+
+        const btnResolve = document.getElementById("btn-resolve");
+        const btnNext = document.getElementById("btn-next");
+        if (state.all_submitted) {
+          show(btnResolve); hide(btnNext);
+        } else {
+          hide(btnResolve); hide(btnNext);
+        }
+      } else if (state.phase === "reveal") {
+        hide(lobby); hide(round); show(reveal); hide(ended);
+        document.getElementById("reveal-item-name").textContent = state.resolved?.item_name || "";
+        document.getElementById("reveal-item-value").textContent = 
+          state.resolved ? `Value: ${state.resolved.item_value}` : "";
+        document.getElementById("winner-text").textContent = state.resolved?.winner_name
+          ? `${state.resolved.winner_name} won!`
+          : "No one bid.";
+      } else if (state.phase === "ended") {
+        hide(lobby); hide(round); hide(reveal); show(ended);
+        document.getElementById("leaderboard").innerHTML = state.leaderboard
+          .map((p, i) => `<li class="rank-${i + 1}">${i + 1}. ${escapeHtml(p.name)} — ${p.total_value}</li>`)
+          .join("");
+      }
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    document.getElementById("btn-start").onclick = async () => {
+      await fetch(`${API}/advance`, { method: "POST" });
+      poll();
+    };
+
+    document.getElementById("btn-resolve").onclick = async () => {
+      await fetch(`${API}/resolve`, { method: "POST" });
+      poll();
+    };
+
+    document.getElementById("btn-next").onclick = document.getElementById("btn-next-round").onclick = async () => {
+      await fetch(`${API}/advance`, { method: "POST" });
+      poll();
+    };
+
+    function poll() {
+      fetchState().then(render);
+    }
+
+    setInterval(poll, 2500);
+    poll();
+  </script>
+</body>
+</html>

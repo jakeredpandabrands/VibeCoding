@@ -1,0 +1,8 @@
+# Render Blueprint - optional; you can also configure via the dashboard
+services:
+  - type: web
+    name: cool-stuff
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars: []

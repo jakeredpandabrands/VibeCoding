@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run {{ run.triggered_at[:19] }} — Be the Better Deal</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <a href="{{ url_for('index') }}" class="back">&larr; Back</a>
+      <h1>Run {{ run.triggered_at[:19] }} UTC</h1>
+    </header>
+
+    <section class="results">
+      <table>
+        <thead>
+          <tr>
+            <th>ASIN</th>
+            <th></th>
+            <th>Price</th>
+            <th>List</th>
+            <th>Deal</th>
+            <th>Coupon</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in snapshots %}
+          <tr class="{{ 'yours' if s.is_yours else '' }}">
+            <td><a href="https://www.amazon.com/dp/{{ s.asin }}" target="_blank" rel="noopener">{{ s.asin }}</a></td>
+            <td>{% if s.is_yours %}<span class="badge">yours</span>{% endif %}</td>
+            <td class="price">${{ "%.2f" % s.price if s.price else "—" }}</td>
+            <td class="muted">${{ "%.2f" % s.list_price if s.list_price else "—" }}</td>
+            <td>
+              {% if s.deal_type %}
+              <span class="deal">{{ s.deal_type }}{% if s.deal_details %} · {{ s.deal_details }}{% endif %}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if s.coupon_amount %}
+              <span class="coupon">{{ s.coupon_amount }}{% if s.coupon_code %} ({{ s.coupon_code }}){% endif %}</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

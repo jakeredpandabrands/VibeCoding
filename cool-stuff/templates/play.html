@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Play — COOL STUFF!</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container play-view">
+    <header>
+      <h1>COOL STUFF!</h1>
+      <p class="tagline" id="tagline">The blind auction</p>
+    </header>
+
+    <div id="app">
+      <div id="waiting" class="card">
+        <p>Waiting for host to start...</p>
+      </div>
+
+      <div id="play-phase" class="card hidden">
+        <h2>Round <span id="round-num"></span></h2>
+        <div class="item-card">
+          <span class="item-name" id="item-name"></span>
+        </div>
+
+        <div id="bid-form" class="action-form">
+          <div class="field">
+            <label for="bid-amount">Your bid ($)</label>
+            <input type="number" id="bid-amount" min="0" step="1" placeholder="0" inputmode="numeric">
+          </div>
+          <div class="options">
+            <label class="checkbox">
+              <input type="checkbox" id="sit-out"> Sit out this round
+            </label>
+            <div id="sell-option" class="hidden">
+              <label for="sell-select">Sell an item (get 75% cash)</label>
+              <select id="sell-select">
+                <option value="">— None —</option>
+              </select>
+            </div>
+          </div>
+          <button id="btn-submit" class="btn-primary">Submit</button>
+        </div>
+
+        <div id="submitted" class="hidden">
+          <p class="status">Submitted! Waiting for others...</p>
+          <p id="my-action-summary"></p>
+        </div>
+      </div>
+
+      <div id="reveal-phase" class="card hidden">
+        <h2>Result</h2>
+        <div class="reveal-card">
+          <span class="item-name" id="reveal-item-name"></span>
+          <span class="item-value" id="reveal-item-value"></span>
+          <p id="winner-text"></p>
+        </div>
+        <p class="status">Wait for host to start next round...</p>
+      </div>
+
+      <div id="ended-phase" class="card hidden">
+        <h2>Game Over!</h2>
+        <ul id="leaderboard"></ul>
+        <h3>Your collection</h3>
+        <ul id="my-collection"></ul>
+      </div>
+
+      <aside class="leaderboard-mini">
+        <h3>Standings</h3>
+        <ul id="standings"></ul>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const GAME_ID = "{{ game_id }}";
+    const PLAYER_ID = "{{ player_id }}";
+    const API = `/api/game/${GAME_ID}`;
+
+    const waiting = document.getElementById("waiting");
+    const playPhase = document.getElementById("play-phase");
+    const revealPhase = document.getElementById("reveal-phase");
+    const endedPhase = document.getElementById("ended-phase");
+    const bidForm = document.getElementById("bid-form");
+    const submitted = document.getElementById("submitted");
+    const sellOption = document.getElementById("sell-option");
+    const sitOutCheck = document.getElementById("sit-out");
+
+    function show(el) { el?.classList.remove("hidden"); }
+    function hide(el) { el?.classList.add("hidden"); }
+
+    async function fetchState() {
+      const r = await fetch(`${API}/state?player_id=${PLAYER_ID}`);
+      return r.json();
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function render(state) {
+      // Standings (always visible when we have data)
+      const standings = document.getElementById("standings");
+      if (state.leaderboard?.length) {
+        standings.innerHTML = state.leaderboard
+          .map((p, i) => `<li>${i + 1}. ${escapeHtml(p.name)} — ${p.total_value}</li>`)
+          .join("");
+      }
+
+      if (state.phase === "lobby") {
+        show(waiting); hide(playPhase); hide(revealPhase); hide(endedPhase);
+      } else if (state.phase === "play") {
+        hide(waiting); show(playPhase); hide(revealPhase); hide(endedPhase);
+
+        document.getElementById("round-num").textContent = state.current_round + 1;
+        document.getElementById("item-name").textContent = state.current_item?.name || "—";
+
+        if (state.has_submitted) {
+          hide(bidForm); show(submitted);
+          const act = state.my_action;
+          let msg = "";
+          if (act?.sit_out) {
+            msg = "You sat out";
+            if (act.sell_item !== undefined && act.sell_item !== null) {
+              msg += " and sold an item";
+            }
+          } else {
+            msg = "You bid!";
+          }
+          document.getElementById("my-action-summary").textContent = msg;
+        } else {
+          show(bidForm); hide(submitted);
+
+          // Populate sell dropdown
+          const sel = document.getElementById("sell-select");
+          const coll = state.my_collection || [];
+          sel.innerHTML = '<option value="">— None —</option>' +
+            coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)} (value ${it.value})</option>`).join("");
+
+          if ((state.my_collection || []).length > 0 && sitOutCheck.checked) {
+            show(sellOption);
+          } else {
+            hide(sellOption);
+          }
+        }
+      } else if (state.phase === "reveal") {
+        hide(waiting); hide(playPhase); show(revealPhase); hide(endedPhase);
+
+        document.getElementById("reveal-item-name").textContent = state.resolved?.item_name || "";
+        document.getElementById("reveal-item-value").textContent =
+          state.resolved ? `Value: ${state.resolved.item_value}` : "";
+        document.getElementById("winner-text").textContent = state.resolved?.winner_name
+          ? `${state.resolved.winner_name} won!`
+          : "No one bid.";
+      } else if (state.phase === "ended") {
+        hide(waiting); hide(playPhase); hide(revealPhase); show(endedPhase);
+
+        document.getElementById("leaderboard").innerHTML = state.leaderboard
+          .map((p, i) => `<li class="rank-${i + 1}">${i + 1}. ${escapeHtml(p.name)} — ${p.total_value}</li>`)
+          .join("");
+
+        const myColl = state.my_collection || [];
+        document.getElementById("my-collection").innerHTML = myColl.length
+          ? myColl.map(it => `<li>${escapeHtml(it.name)} (${it.value})</li>`).join("")
+          : "<li>No items won</li>";
+      }
+    }
+
+    sitOutCheck?.addEventListener("change", () => {
+      if (sitOutCheck.checked) {
+        const coll = document.querySelectorAll("#sell-select option");
+        if (coll.length > 1) show(sellOption);
+      } else {
+        hide(sellOption);
+      }
+    });
+
+    document.getElementById("btn-submit").onclick = async () => {
+      const sitOut = document.getElementById("sit-out").checked;
+      const bidInput = document.getElementById("bid-amount");
+      const sellSelect = document.getElementById("sell-select");
+
+      const payload = {
+        player_id: PLAYER_ID,
+        sit_out: sitOut,
+      };
+
+      if (sitOut) {
+        const v = sellSelect.value;
+        payload.sell_item = v === "" ? null : parseInt(v, 10);
+      } else {
+        const amt = parseInt(bidInput.value, 10);
+        if (isNaN(amt) || amt < 0) {
+          alert("Enter a valid bid amount.");
+          return;
+        }
+        payload.bid = amt;
+      }
+
+      const r = await fetch(`${API}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await r.json();
+      if (r.ok && data.ok) {
+        document.body.dataset.collection = JSON.stringify(
+          (await fetchState()).my_collection || []
+        );
+        poll();
+      } else {
+        alert(data.error || "Something went wrong.");
+      }
+    };
+
+    function poll() {
+      fetchState().then(s => {
+        document.body.dataset.collection = JSON.stringify(s.my_collection || []);
+        render(s);
+      });
+    }
+
+    setInterval(poll, 2500);
+    poll();
+  </script>
+</body>
+</html>
