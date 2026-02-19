@@ -19,7 +19,8 @@
         <p class="join-url">Game code: <strong id="game-code"></strong></p>
         <p class="hint">Share this code with players. They enter it on the main page.</p>
         <ul id="player-list"></ul>
-        <button id="btn-start" class="btn-primary" disabled>Start Game</button>
+        <p id="start-hint" class="hint">Need at least 2 players to start</p>
+        <button id="btn-start" type="button" class="btn-primary" disabled>Start Game</button>
       </div>
 
       <div id="round" class="card hidden">
@@ -90,7 +91,11 @@
         show(lobby); hide(round); hide(reveal); hide(ended);
         document.getElementById("player-list").innerHTML = state.players
           .map(p => `<li>${escapeHtml(p.name)}</li>`).join("");
-        document.getElementById("btn-start").disabled = state.players.length < 2;
+        const canStart = state.players.length >= 2;
+        document.getElementById("btn-start").disabled = !canStart;
+        document.getElementById("start-hint").textContent = canStart
+          ? `${state.players.length} players ready — click to start`
+          : `Need at least 2 players to start (${state.players.length}/2)`;
       } else if (state.phase === "play") {
         hide(lobby); show(round); hide(reveal); hide(ended);
         document.getElementById("host-bankroll").textContent = state.my_budget != null ? `$${state.my_budget}` : "—";
@@ -176,7 +181,17 @@
     };
 
     document.getElementById("btn-start").onclick = async () => {
-      await fetch(`${API}/advance`, { method: "POST" });
+      try {
+        const r = await fetch(`${API}/advance`, { method: "POST" });
+        const data = await r.json();
+        if (!r.ok) {
+          alert(data.error || "Could not start game");
+          return;
+        }
+      } catch (e) {
+        alert("Network error — try again");
+        return;
+      }
       poll();
     };
 
