@@ -12,8 +12,8 @@ python app.py
 
 Open http://localhost:5000 (or http://YOUR_IP:5000 for others on your WiFi).
 
-1. Host: Create Game → share the join URL with players
-2. Players: Join, enter name
+1. Host: Create Game (choose a 4–6 character code, e.g. PARTY1) → host auto-joins
+2. Players: Enter the game code and name on the main page
 3. Host: Start Game when 2–8 players are ready
 4. Each round: bid or sit out (optionally sell an item for 75% cash)
 5. Highest bid wins. Item value revealed. Winning bid stays secret. Repeat for 10 rounds.
@@ -26,7 +26,7 @@ Open http://localhost:5000 (or http://YOUR_IP:5000 for others on your WiFi).
 4. Connect your GitHub repo. If cool-stuff is a subfolder (e.g. in VibeCoding), set **Root Directory** to `cool-stuff`.
 5. Settings:
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app -c gunicorn_config.py`
+   - **Start Command:** `gunicorn app:app -c gunicorn_config.py` (config forces 1 worker so game state is shared)
 6. Click **Create Web Service**. First deploy takes ~2 min.
 7. Your app will be at `https://your-app-name.onrender.com`.
 

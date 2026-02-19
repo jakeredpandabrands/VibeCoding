@@ -16,7 +16,8 @@
     <div id="app">
       <div id="lobby" class="card hidden">
         <h2>Lobby</h2>
-        <p class="join-url">Players join at: <code id="join-url"></code></p>
+        <p class="join-url">Game code: <strong id="game-code"></strong></p>
+        <p class="hint">Share this code with players. They enter it on the main page.</p>
         <ul id="player-list"></ul>
         <button id="btn-start" class="btn-primary" disabled>Start Game</button>
       </div>
@@ -27,6 +28,14 @@
           <span class="item-name" id="item-name"></span>
         </div>
         <p id="phase-label"></p>
+        <div id="host-bid" class="host-bid-form hidden">
+          <label for="host-bid-amount">Your bid ($)</label>
+          <div class="bid-row">
+            <input type="number" id="host-bid-amount" min="0" placeholder="0">
+            <label class="checkbox"><input type="checkbox" id="host-sit-out"> Sit out</label>
+            <button id="host-bid-submit" class="btn-secondary">Submit</button>
+          </div>
+        </div>
         <p id="submitted-count"></p>
         <div class="host-actions">
           <button id="btn-resolve" class="btn-secondary hidden">Resolve Round</button>
@@ -52,6 +61,7 @@
   </main>
   <script>
     const GAME_ID = "{{ game_id }}";
+    const HOST_PLAYER_ID = "{{ host_player_id or '' }}";
     const API = `/api/game/${GAME_ID}`;
 
     const lobby = document.getElementById("lobby");
@@ -63,13 +73,13 @@
     function hide(el) { el.classList.add("hidden"); }
 
     async function fetchState() {
-      const r = await fetch(`${API}/state`);
+      const url = HOST_PLAYER_ID ? `${API}/state?player_id=${HOST_PLAYER_ID}` : `${API}/state`;
+      const r = await fetch(url);
       return r.json();
     }
 
     function render(state) {
-      const baseUrl = window.location.origin;
-      document.getElementById("join-url").textContent = `${baseUrl}/game/${GAME_ID}/join`;
+      document.getElementById("game-code").textContent = GAME_ID;
 
       if (state.phase === "lobby") {
         show(lobby); hide(round); hide(reveal); hide(ended);
@@ -85,8 +95,16 @@
         document.getElementById("submitted-count").textContent = 
           `${state.submitted_count || 0}/${state.players.length} submitted`;
 
+        const hostBid = document.getElementById("host-bid");
         const btnResolve = document.getElementById("btn-resolve");
         const btnNext = document.getElementById("btn-next");
+        if (state.has_submitted && HOST_PLAYER_ID) {
+          hide(hostBid);
+        } else if (HOST_PLAYER_ID) {
+          show(hostBid);
+        } else {
+          hide(hostBid);
+        }
         if (state.all_submitted) {
           show(btnResolve); hide(btnNext);
         } else {
@@ -113,6 +131,21 @@
       div.textContent = s;
       return div.innerHTML;
     }
+
+    document.getElementById("host-bid-submit").onclick = async () => {
+      if (!HOST_PLAYER_ID) return;
+      const sitOut = document.getElementById("host-sit-out").checked;
+      const amount = parseInt(document.getElementById("host-bid-amount").value, 10) || 0;
+      const payload = sitOut 
+        ? { player_id: HOST_PLAYER_ID, sit_out: true, sell_item: null }
+        : { player_id: HOST_PLAYER_ID, sit_out: false, bid: amount };
+      await fetch(`${API}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      poll();
+    };
 
     document.getElementById("btn-start").onclick = async () => {
       await fetch(`${API}/advance`, { method: "POST" });

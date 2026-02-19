@@ -34,6 +34,7 @@ git push -u origin main
    - **Runtime:** Python 3
    - **Build Command:** `pip install -r requirements.txt`
    - **Start Command:** `gunicorn app:app -c gunicorn_config.py`
+   - The config uses 1 worker (required for in-memory game state)
 6. **Create Web Service**
 
 First deploy takes ~2 minutes. You'll get a URL like `https://cool-stuff-xxxx.onrender.com`.

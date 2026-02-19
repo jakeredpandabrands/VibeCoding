@@ -26,9 +26,13 @@ app = Flask(__name__)
 games: dict[str, dict] = {}
 
 
-def game_id() -> str:
-    """Generate short game ID."""
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+GAME_CODE_LEN = 6
+GAME_CODE_CHARS = string.ascii_uppercase + string.digits
+
+
+def normalize_game_code(raw: str) -> str:
+    """Uppercase, alphanumeric only."""
+    return "".join(c for c in (raw or "").upper() if c in GAME_CODE_CHARS)[:GAME_CODE_LEN]
 
 
 def player_id() -> str:
@@ -42,12 +46,16 @@ def draw_items(count: int) -> list[dict]:
     return [dict(item) for item in shuffled]
 
 
-def create_game() -> dict:
-    """Create a new game."""
-    gid = game_id()
+def create_game(game_code: str, host_name: str) -> dict | None:
+    """Create a new game with host-chosen code. Host auto-joins as first player. Returns game or None if code taken."""
+    code = normalize_game_code(game_code)
+    if len(code) < 4:
+        return None
+    if code in games:
+        return None
     items = draw_items(ROUNDS)
-    games[gid] = {
-        "id": gid,
+    games[code] = {
+        "id": code,
         "players": [],
         "items": items,
         "current_round": 0,
@@ -57,12 +65,15 @@ def create_game() -> dict:
         "actions": {},
         "winner": None,
     }
-    return games[gid]
+    g = games[code]
+    # Host auto-joins as first player
+    p = add_player(code, host_name)
+    return g if p else None
 
 
 def get_game(gid: str) -> dict | None:
-    """Get game by ID."""
-    return games.get(gid)
+    """Get game by ID (game code). Normalizes for lookup."""
+    return games.get(normalize_game_code(gid))
 
 
 def add_player(gid: str, name: str) -> dict | None:
@@ -234,10 +245,31 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/game", methods=["POST"])
+@app.route("/game/create", methods=["POST"])
 def game_create():
-    g = create_game()
+    game_code = (request.form.get("game_code") or "").strip()
+    host_name = (request.form.get("host_name") or "Host").strip()
+    if not host_name:
+        host_name = "Host"
+    g = create_game(game_code, host_name)
+    if not g:
+        return render_template("index.html", create_error="Game code taken or invalid (use 4–6 letters/numbers)")
     return redirect(url_for("host", game_id=g["id"]))
+
+
+@app.route("/game/join", methods=["POST"])
+def game_join():
+    game_code = (request.form.get("game_code") or "").strip()
+    player_name = (request.form.get("player_name") or "").strip()
+    g = get_game(game_code)
+    if not g:
+        return render_template("index.html", join_error="Game not found. Check the code.")
+    if not player_name:
+        return render_template("index.html", join_error="Enter your name.")
+    p = add_player(game_code, player_name)
+    if not p:
+        return render_template("index.html", join_error="Game full or already started.")
+    return redirect(url_for("play", game_id=g["id"], player_id=p["id"]))
 
 
 @app.route("/game/<game_id>/host")
@@ -245,7 +277,8 @@ def host(game_id):
     g = get_game(game_id)
     if not g:
         return "Game not found", 404
-    return render_template("host.html", game_id=game_id)
+    host_player_id = g["players"][0]["id"] if g["players"] else None
+    return render_template("host.html", game_id=g["id"], host_player_id=host_player_id)
 
 
 @app.route("/game/<game_id>/join", methods=["GET", "POST"])
