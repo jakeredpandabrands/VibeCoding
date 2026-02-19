@@ -26,6 +26,7 @@
         <h2>Round <span id="round-num"></span> of <span id="round-total"></span></h2>
         <div id="current-item" class="item-card">
           <span class="item-name" id="item-name"></span>
+          <p id="min-bid-hint" class="min-bid hidden"></p>
         </div>
         <p id="phase-label"></p>
         <div id="host-bid" class="host-bid-form hidden">
@@ -96,6 +97,13 @@
         document.getElementById("round-num").textContent = state.current_round + 1;
         document.getElementById("round-total").textContent = state.rounds_total;
         document.getElementById("item-name").textContent = state.current_item?.name || "—";
+        const minBid = document.getElementById("min-bid-hint");
+        if (state.current_item?.min_bid) {
+          minBid.textContent = `Big-ticket item — minimum bid: $${state.current_item.min_bid.toLocaleString()}`;
+          minBid.classList.remove("hidden");
+        } else {
+          minBid.classList.add("hidden");
+        }
         document.getElementById("phase-label").textContent = "Players are bidding...";
         document.getElementById("submitted-count").textContent = 
           `${state.submitted_count || 0}/${state.players.length} submitted`;

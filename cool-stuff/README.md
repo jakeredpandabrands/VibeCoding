@@ -35,6 +35,7 @@ Play on laptop + phone by opening the same URL. Free tier spins down after ~15 m
 ## Rules
 
 - **Starting budget:** $1,000
+- **Big-ticket items:** Tiered minimum bids — over $1K→$1K min, over $10K→$10K min, over $100K→$100K min, over $1M→$1M min, etc. (trade up to afford bigger items)
 - **Sell payout:** 75% of item's full value
 - **Win condition:** Most total value in stuff collected
 - **Privacy:** Bankrolls and winning bids are never shown

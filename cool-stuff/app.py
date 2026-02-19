@@ -11,6 +11,16 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 # Constants
 STARTING_BUDGET = 1000
 ROUNDS = 10
+# Tiered min bids: item value above threshold → min bid required
+MIN_BID_STAGES = [
+    (1_000_000_000, 1_000_000_000),
+    (100_000_000, 100_000_000),
+    (10_000_000, 10_000_000),
+    (1_000_000, 1_000_000),
+    (100_000, 100_000),
+    (10_000, 10_000),
+    (1_000, 1_000),
+]
 SELL_MULTIPLIER = 0.75
 MIN_PLAYERS = 2
 MAX_PLAYERS = 8
@@ -106,6 +116,15 @@ def get_current_item(g: dict) -> dict | None:
     return g["items"][g["current_round"]]
 
 
+def get_min_bid(item: dict) -> int:
+    """Tiered minimum bids: over 1K→1K, over 10K→10K, over 100K→100K, etc."""
+    val = item["value"]
+    for threshold, min_bid in MIN_BID_STAGES:
+        if val > threshold:
+            return min_bid
+    return 0
+
+
 def all_actions_received(g: dict) -> bool:
     """Check if all active players have submitted."""
     item = get_current_item(g)
@@ -146,10 +165,14 @@ def resolve_round(g: dict) -> None:
     if not item:
         return
 
-    if bidders:
-        # Highest bid wins. Tie: first submitter wins (dict order preserves insertion)
-        winner_pid = max(bidders, key=lambda x: x[1])[0]
-        winning_bid = max(b[1] for b in bidders)
+    min_bid = get_min_bid(item)
+    # Filter out bids below minimum (for big-ticket items)
+    valid_bidders = [(pid, amt) for pid, amt in bidders if amt >= min_bid]
+
+    if valid_bidders:
+        # Highest bid wins. Tie: first submitter wins
+        winner_pid = max(valid_bidders, key=lambda x: x[1])[0]
+        winning_bid = max(b[1] for b in valid_bidders)
 
         g["budgets"][winner_pid] -= winning_bid
         g["collections"][winner_pid].append(
@@ -157,7 +180,7 @@ def resolve_round(g: dict) -> None:
         )
         g["winner"] = winner_pid
     else:
-        g["winner"] = None  # No one bid
+        g["winner"] = None  # No one bid or all bids below minimum
 
     g["phase"] = "reveal"
     g["resolved_item"] = item
@@ -197,7 +220,8 @@ def public_state(g: dict, player_id: str | None = None) -> dict:
     current_item = None
     if g["phase"] == "play" and g["current_round"] < len(g["items"]):
         item = g["items"][g["current_round"]]
-        current_item = {"name": item["name"]}
+        min_bid = get_min_bid(item)
+        current_item = {"name": item["name"], "min_bid": min_bid}
 
     my_action = g["actions"].get(player_id) if player_id else None
 
@@ -343,8 +367,12 @@ def api_action(game_id):
         try:
             amount = int(bid) if bid is not None else 0
             budget = g["budgets"][pid]
+            item = get_current_item(g)
+            min_bid = get_min_bid(item) if item else 0
             if amount < 0 or amount > budget:
                 return jsonify({"error": "invalid_bid"}), 400
+            if amount < min_bid:
+                return jsonify({"error": f"Bid must be at least ${min_bid} for this item"}), 400
             g["actions"][pid] = {"sit_out": False, "bid": amount}
         except (TypeError, ValueError):
             return jsonify({"error": "invalid_bid"}), 400
