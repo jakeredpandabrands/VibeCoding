@@ -13,13 +13,13 @@ STARTING_BUDGET = 1000
 ROUNDS = 10
 # Tiered min bids: item value above threshold → min bid required
 MIN_BID_STAGES = [
-    (1_000_000_000, 1_000_000_000),
-    (100_000_000, 100_000_000),
-    (10_000_000, 10_000_000),
-    (1_000_000, 1_000_000),
-    (100_000, 100_000),
-    (10_000, 10_000),
-    (1_000, 1_000),
+    (1000000000, 1000000000),
+    (100000000, 100000000),
+    (10000000, 10000000),
+    (1000000, 1000000),
+    (100000, 100000),
+    (10000, 10000),
+    (1000, 1000),
 ]
 SELL_MULTIPLIER = 0.75
 MIN_PLAYERS = 2
@@ -27,8 +27,13 @@ MAX_PLAYERS = 8
 
 # Load items
 ITEMS_PATH = Path(__file__).parent / "items.json"
-with open(ITEMS_PATH) as f:
-    ALL_ITEMS = json.load(f)
+try:
+    with open(ITEMS_PATH, encoding="utf-8") as f:
+        ALL_ITEMS = json.load(f)
+except Exception as e:
+    import sys
+    print(f"FATAL: Could not load items.json: {e}", file=sys.stderr)
+    raise
 
 app = Flask(__name__)
 

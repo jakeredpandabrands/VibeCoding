@@ -3,7 +3,7 @@
 ## Fixes applied (for blank page / no response)
 
 - **gunicorn_config.py** — Binds to `0.0.0.0:PORT` (reads from env; Render sets PORT=10000)
-- **runtime.txt** — Pins Python 3.12
+- **.python-version** — Pins Python 3.12 for Render
 - **/health** — Simple health check endpoint
 - **Start command** — Use `gunicorn app:app -c gunicorn_config.py` (avoid $PORT shell expansion issues)
 
