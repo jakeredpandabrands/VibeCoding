@@ -20,6 +20,7 @@
         <p class="hint">Share this code with players. They enter it on the main page.</p>
         <ul id="player-list"></ul>
         <p id="start-hint" class="hint">Need at least 2 players to start</p>
+        <p id="lobby-error" class="error hidden"></p>
         <button id="btn-start" type="button" class="btn-primary" disabled>Start Game</button>
       </div>
 
@@ -32,15 +33,29 @@
         <p id="phase-label"></p>
         <div id="host-bid" class="host-bid-form hidden">
           <p class="bankroll">Your bankroll: <strong id="host-bankroll">—</strong></p>
-          <label for="host-bid-amount">Your bid ($)</label>
-          <div class="bid-row">
-            <input type="number" id="host-bid-amount" min="0" placeholder="0">
-            <label class="checkbox"><input type="checkbox" id="host-sit-out"> Sit out</label>
-            <div id="host-sell-option" class="hidden">
-              <label for="host-sell-select">Sell item (75%)</label>
-              <select id="host-sell-select"></select>
+          <p id="host-bid-error" class="error hidden"></p>
+          <div id="host-bid-option" class="action-option">
+            <h4>Bid on this item</h4>
+            <div class="field">
+              <label for="host-bid-amount">Your bid ($)</label>
+              <input type="number" id="host-bid-amount" min="0" placeholder="0">
             </div>
-            <button id="host-bid-submit" class="btn-secondary">Submit</button>
+            <button id="host-bid-submit" class="btn-primary">Place Bid</button>
+          </div>
+          <div id="host-cant-afford" class="action-option hidden">
+            <p class="cant-afford-msg">You ain't ready for the big leagues yet.</p>
+            <p class="hint">Need <strong id="host-need-amount">$1,000</strong> to bid. Use Pawn Shop to trade up.</p>
+          </div>
+          <div id="host-pawn-option" class="action-option pawn-card">
+            <h4>Pawn Shop</h4>
+            <p class="hint">Skip this round’s bid. Optional: sell an item for 75% to boost your bankroll.</p>
+            <div id="host-sell-option" class="field hidden">
+              <label for="host-sell-select">Sell an item</label>
+              <select id="host-sell-select">
+                <option value="">— Keep it —</option>
+              </select>
+            </div>
+            <button id="host-pawn-submit" class="btn-secondary">Visit Pawn Shop</button>
           </div>
         </div>
         <p id="submitted-count"></p>
@@ -56,6 +71,7 @@
           <span class="item-value" id="reveal-item-value"></span>
           <p id="winner-text"></p>
         </div>
+        <p id="host-error" class="error hidden"></p>
         <button id="btn-next-round" class="btn-primary">Next Round</button>
       </div>
 
@@ -98,16 +114,21 @@
           : `Need at least 2 players to start (${state.players.length}/2)`;
       } else if (state.phase === "play") {
         hide(lobby); show(round); hide(reveal); hide(ended);
-        document.getElementById("host-bankroll").textContent = state.my_budget != null ? `$${state.my_budget}` : "—";
+        const bankrollEl = document.getElementById("host-bankroll");
+        bankrollEl.textContent = state.my_budget != null ? `$${state.my_budget}` : "—";
+        bankrollEl.dataset.budget = String(state.my_budget ?? 0);
         document.getElementById("round-num").textContent = state.current_round + 1;
         document.getElementById("round-total").textContent = state.rounds_total;
         document.getElementById("item-name").textContent = state.current_item?.name || "—";
-        const minBid = document.getElementById("min-bid-hint");
-        if (state.current_item?.min_bid) {
-          minBid.textContent = `Big-ticket item — minimum bid: $${state.current_item.min_bid.toLocaleString()}`;
-          minBid.classList.remove("hidden");
+        const minBidEl = document.getElementById("min-bid-hint");
+        const minBidVal = state.current_item?.min_bid || 0;
+        if (minBidVal > 0) {
+          minBidEl.textContent = `Big-ticket item — minimum bid: $${minBidVal.toLocaleString()}`;
+          minBidEl.dataset.minBid = String(minBidVal);
+          minBidEl.classList.remove("hidden");
         } else {
-          minBid.classList.add("hidden");
+          minBidEl.dataset.minBid = "0";
+          minBidEl.classList.add("hidden");
         }
         document.getElementById("phase-label").textContent = "Players are bidding...";
         document.getElementById("submitted-count").textContent = 
@@ -119,16 +140,24 @@
           hide(hostBid);
         } else if (HOST_PLAYER_ID) {
           show(hostBid);
+          document.getElementById("host-bid-error").classList.add("hidden");
+          const minBidVal = state.current_item?.min_bid || 0;
+          const budget = state.my_budget ?? 0;
+          const canAfford = budget >= minBidVal;
+          const hostBidOpt = document.getElementById("host-bid-option");
+          const hostCantAfford = document.getElementById("host-cant-afford");
+          if (canAfford) {
+            show(hostBidOpt); hide(hostCantAfford);
+          } else {
+            hide(hostBidOpt); show(hostCantAfford);
+            document.getElementById("host-need-amount").textContent = `$${minBidVal.toLocaleString()}`;
+          }
           const sellOpt = document.getElementById("host-sell-option");
           const sellSel = document.getElementById("host-sell-select");
           const coll = state.my_collection || [];
-          sellSel.innerHTML = "<option value=''>— None —</option>" +
-            coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)}</option>`).join("");
-          if (coll.length > 0 && document.getElementById("host-sit-out").checked) {
-            sellOpt.classList.remove("hidden");
-          } else {
-            sellOpt.classList.add("hidden");
-          }
+          sellSel.innerHTML = "<option value=''>— Keep it —</option>" +
+            coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)} (75% = $${Math.floor(it.value * 0.75).toLocaleString()})</option>`).join("");
+          if (coll.length > 0) show(sellOpt); else hide(sellOpt);
         } else {
           hide(hostBid);
         }
@@ -136,12 +165,14 @@
         hide(btnNext);
       } else if (state.phase === "reveal") {
         hide(lobby); hide(round); show(reveal); hide(ended);
+        document.getElementById("host-error").classList.add("hidden");
         document.getElementById("reveal-item-name").textContent = state.resolved?.item_name || "";
         document.getElementById("reveal-item-value").textContent = 
           state.resolved ? `Value: ${state.resolved.item_value}` : "";
         document.getElementById("winner-text").textContent = state.resolved?.winner_name
           ? `${state.resolved.winner_name} won!`
           : "No one bid.";
+        show(document.getElementById("btn-next-round"));
       } else if (state.phase === "ended") {
         hide(lobby); hide(round); hide(reveal); show(ended);
         document.getElementById("leaderboard").innerHTML = state.leaderboard
@@ -156,49 +187,99 @@
       return div.innerHTML;
     }
 
-    document.getElementById("host-sit-out").addEventListener("change", () => {
-      const sellOpt = document.getElementById("host-sell-option");
-      if (document.getElementById("host-sit-out").checked && document.getElementById("host-sell-select").options.length > 1) {
-        sellOpt.classList.remove("hidden");
-      } else {
-        sellOpt.classList.add("hidden");
-      }
-    });
     document.getElementById("host-bid-submit").onclick = async () => {
       if (!HOST_PLAYER_ID) return;
-      const sitOut = document.getElementById("host-sit-out").checked;
+      const errEl = document.getElementById("host-bid-error");
+      errEl.classList.add("hidden");
       const amount = parseInt(document.getElementById("host-bid-amount").value, 10) || 0;
+      const minBid = parseInt(document.getElementById("min-bid-hint")?.dataset.minBid || "0", 10) || 0;
+      const budget = parseInt(document.getElementById("host-bankroll")?.dataset.budget || "0", 10) || 0;
+      if (minBid > 0 && amount < minBid) {
+        errEl.textContent = `Minimum bid for this item is $${minBid.toLocaleString()}.`;
+        errEl.classList.remove("hidden");
+        return;
+      }
+      if (amount > budget) {
+        errEl.textContent = `You only have $${budget.toLocaleString()}. Can't bid more than your bankroll.`;
+        errEl.classList.remove("hidden");
+        return;
+      }
+      const r = await fetch(`${API}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: HOST_PLAYER_ID, sit_out: false, bid: amount }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) poll();
+      else {
+        errEl.textContent = data.error || "Something went wrong.";
+        errEl.classList.remove("hidden");
+      }
+    };
+    document.getElementById("host-pawn-submit").onclick = async () => {
+      if (!HOST_PLAYER_ID) return;
+      const errEl = document.getElementById("host-bid-error");
+      errEl.classList.add("hidden");
       const sellVal = document.getElementById("host-sell-select").value;
-      const payload = sitOut 
-        ? { player_id: HOST_PLAYER_ID, sit_out: true, sell_item: sellVal === "" ? null : parseInt(sellVal, 10) }
-        : { player_id: HOST_PLAYER_ID, sit_out: false, bid: amount };
-      await fetch(`${API}/action`, {
+      const payload = { player_id: HOST_PLAYER_ID, sit_out: true, sell_item: sellVal === "" ? null : parseInt(sellVal, 10) };
+      const r = await fetch(`${API}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      poll();
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) poll();
+      else {
+        errEl.textContent = data.error || "Something went wrong.";
+        errEl.classList.remove("hidden");
+      }
     };
 
     document.getElementById("btn-start").onclick = async () => {
+      const errEl = document.getElementById("lobby-error");
+      errEl.classList.add("hidden");
       try {
         const r = await fetch(`${API}/advance`, { method: "POST" });
-        const data = await r.json();
+        const data = await r.json().catch(() => ({}));
         if (!r.ok) {
-          alert(data.error || "Could not start game");
+          errEl.textContent = data.error || "Could not start game";
+          errEl.classList.remove("hidden");
           return;
         }
       } catch (e) {
-        alert("Network error — try again");
+        errEl.textContent = "Network error — try again";
+        errEl.classList.remove("hidden");
         return;
       }
       poll();
     };
 
-    document.getElementById("btn-next").onclick = document.getElementById("btn-next-round").onclick = async () => {
-      await fetch(`${API}/advance`, { method: "POST" });
+    const nextRoundHandler = async () => {
+      const errEl = document.getElementById("host-error");
+      if (errEl) errEl.classList.add("hidden");
+      try {
+        const r = await fetch(`${API}/advance`, { method: "POST" });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          if (errEl) {
+            errEl.textContent = data.error || "Could not advance";
+            errEl.classList.remove("hidden");
+          }
+          return;
+        }
+      } catch (e) {
+        if (errEl) {
+          errEl.textContent = "Network error — try again";
+          errEl.classList.remove("hidden");
+        }
+        return;
+      }
       poll();
     };
+    const btnNext = document.getElementById("btn-next");
+    const btnNextRound = document.getElementById("btn-next-round");
+    if (btnNext) btnNext.onclick = nextRoundHandler;
+    if (btnNextRound) btnNextRound.onclick = nextRoundHandler;
 
     function poll() {
       fetchState().then(render);

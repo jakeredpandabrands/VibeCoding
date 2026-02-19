@@ -26,22 +26,30 @@
         </div>
 
         <div id="bid-form" class="action-form">
-          <div class="field">
-            <label for="bid-amount">Your bid ($)</label>
-            <input type="number" id="bid-amount" min="0" step="1" placeholder="0" inputmode="numeric">
+          <p id="bid-error" class="error hidden"></p>
+          <div id="bid-option" class="action-option">
+            <h4>Bid on this item</h4>
+            <div class="field">
+              <label for="bid-amount">Your bid ($)</label>
+              <input type="number" id="bid-amount" min="0" step="1" placeholder="0" inputmode="numeric">
+            </div>
+            <button id="btn-bid" type="button" class="btn-primary">Place Bid</button>
           </div>
-          <div class="options">
-            <label class="checkbox">
-              <input type="checkbox" id="sit-out"> Sit out this round
-            </label>
-            <div id="sell-option" class="hidden">
-              <label for="sell-select">Sell an item (get 75% cash)</label>
+          <div id="cant-afford" class="action-option hidden">
+            <p class="cant-afford-msg">You ain't ready for the big leagues yet.</p>
+            <p class="hint">Need <strong id="need-amount">$1,000</strong> to bid. Use Pawn Shop to trade up.</p>
+          </div>
+          <div id="pawn-option" class="action-option pawn-card">
+            <h4>Pawn Shop</h4>
+            <p class="hint">Skip this round’s bid. Optional: sell an item for 75% to boost your bankroll.</p>
+            <div id="sell-option" class="field hidden">
+              <label for="sell-select">Sell an item</label>
               <select id="sell-select">
-                <option value="">— None —</option>
+                <option value="">— Keep it —</option>
               </select>
             </div>
+            <button id="btn-pawn" type="button" class="btn-secondary">Visit Pawn Shop</button>
           </div>
-          <button id="btn-submit" class="btn-primary">Submit</button>
         </div>
 
         <div id="submitted" class="hidden">
@@ -86,7 +94,6 @@
     const bidForm = document.getElementById("bid-form");
     const submitted = document.getElementById("submitted");
     const sellOption = document.getElementById("sell-option");
-    const sitOutCheck = document.getElementById("sit-out");
 
     function show(el) { el?.classList.remove("hidden"); }
     function hide(el) { el?.classList.add("hidden"); }
@@ -123,20 +130,24 @@
 
         document.getElementById("round-num").textContent = state.current_round + 1;
         document.getElementById("item-name").textContent = state.current_item?.name || "—";
-        const minBid = document.getElementById("min-bid-hint");
-        if (state.current_item?.min_bid) {
-          minBid.textContent = `Big-ticket item — minimum bid: $${state.current_item.min_bid.toLocaleString()}`;
-          minBid.classList.remove("hidden");
+        const minBidEl = document.getElementById("min-bid-hint");
+        const minBidVal = state.current_item?.min_bid || 0;
+        if (minBidVal > 0) {
+          minBidEl.textContent = `Big-ticket item — minimum bid: $${minBidVal.toLocaleString()}`;
+          minBidEl.dataset.minBid = String(minBidVal);
+          minBidEl.classList.remove("hidden");
         } else {
-          minBid.classList.add("hidden");
+          minBidEl.dataset.minBid = "0";
+          minBidEl.classList.add("hidden");
         }
+        document.getElementById("bid-form").dataset.budget = String(state.my_budget ?? 0);
 
         if (state.has_submitted) {
           hide(bidForm); show(submitted);
           const act = state.my_action;
           let msg = "";
           if (act?.sit_out) {
-            msg = "You sat out";
+            msg = "You visited the Pawn Shop";
             if (act.sell_item !== undefined && act.sell_item !== null) {
               msg += " and sold an item";
             }
@@ -146,20 +157,36 @@
           document.getElementById("my-action-summary").textContent = msg;
         } else {
           show(bidForm); hide(submitted);
+          document.getElementById("bid-error").classList.add("hidden");
 
-          // Sell dropdown: only rebuild when collection changed (prevents poll from resetting selection)
+          const minBid = state.current_item?.min_bid || 0;
+          const budget = state.my_budget ?? 0;
+          const canAfford = budget >= minBid;
+
+          const bidOption = document.getElementById("bid-option");
+          const cantAfford = document.getElementById("cant-afford");
+          const needAmount = document.getElementById("need-amount");
+
+          if (canAfford) {
+            show(bidOption); hide(cantAfford);
+          } else {
+            hide(bidOption); show(cantAfford);
+            needAmount.textContent = `$${(minBid || 0).toLocaleString()}`;
+          }
+
+          // Sell dropdown: only rebuild when collection changed
           const coll = state.my_collection || [];
           const collJson = JSON.stringify(coll.map((it) => it.name + it.value));
           const sel = document.getElementById("sell-select");
           const prevVal = sel.value;
           if (collJson !== lastCollectionJson) {
             lastCollectionJson = collJson;
-            sel.innerHTML = '<option value="">— None —</option>' +
-              coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)} (value ${it.value})</option>`).join("");
+            sel.innerHTML = '<option value="">— Keep it —</option>' +
+              coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)} (75% = $${Math.floor(it.value * 0.75).toLocaleString()})</option>`).join("");
             if (prevVal && coll.length > 0) sel.value = prevVal;
           }
 
-          if (coll.length > 0 && sitOutCheck.checked) {
+          if (coll.length > 0) {
             show(sellOption);
           } else {
             hide(sellOption);
@@ -188,51 +215,63 @@
       }
     }
 
-    sitOutCheck?.addEventListener("change", () => {
-      if (sitOutCheck.checked) {
-        const coll = document.querySelectorAll("#sell-select option");
-        if (coll.length > 1) show(sellOption);
-      } else {
-        hide(sellOption);
-      }
-    });
-
-    document.getElementById("btn-submit").onclick = async () => {
-      const sitOut = document.getElementById("sit-out").checked;
+    document.getElementById("btn-bid").onclick = async () => {
       const bidInput = document.getElementById("bid-amount");
-      const sellSelect = document.getElementById("sell-select");
+      const errEl = document.getElementById("bid-error");
+      errEl.classList.add("hidden");
+      const amt = parseInt(bidInput.value, 10);
+      if (isNaN(amt) || amt < 0) {
+        errEl.textContent = "Enter a valid bid amount.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+      const minBid = parseInt(document.getElementById("min-bid-hint")?.dataset.minBid || "0", 10) || 0;
+      const budget = parseInt(document.getElementById("bid-form")?.dataset.budget || "0", 10) || 0;
+      if (minBid > 0 && amt < minBid) {
+        errEl.textContent = `Minimum bid for this item is $${minBid.toLocaleString()}.`;
+        errEl.classList.remove("hidden");
+        return;
+      }
+      if (amt > budget) {
+        errEl.textContent = `You only have $${budget.toLocaleString()}. Can't bid more than your bankroll.`;
+        errEl.classList.remove("hidden");
+        return;
+      }
+      const r = await fetch(`${API}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: PLAYER_ID, sit_out: false, bid: amt }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        poll();
+      } else {
+        errEl.textContent = data.error || "Something went wrong.";
+        errEl.classList.remove("hidden");
+      }
+    };
 
+    document.getElementById("btn-pawn").onclick = async () => {
+      const sellSelect = document.getElementById("sell-select");
+      const errEl = document.getElementById("bid-error");
+      errEl.classList.add("hidden");
+      const v = sellSelect.value;
       const payload = {
         player_id: PLAYER_ID,
-        sit_out: sitOut,
+        sit_out: true,
+        sell_item: v === "" ? null : parseInt(v, 10),
       };
-
-      if (sitOut) {
-        const v = sellSelect.value;
-        payload.sell_item = v === "" ? null : parseInt(v, 10);
-      } else {
-        const amt = parseInt(bidInput.value, 10);
-        if (isNaN(amt) || amt < 0) {
-          alert("Enter a valid bid amount.");
-          return;
-        }
-        payload.bid = amt;
-      }
-
       const r = await fetch(`${API}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (r.ok && data.ok) {
-        document.body.dataset.collection = JSON.stringify(
-          (await fetchState()).my_collection || []
-        );
         poll();
       } else {
-        alert(data.error || "Something went wrong.");
+        errEl.textContent = data.error || "Something went wrong.";
+        errEl.classList.remove("hidden");
       }
     };
 

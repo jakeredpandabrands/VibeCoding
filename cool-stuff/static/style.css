@@ -164,6 +164,33 @@ textarea:focus {
   margin-bottom: 1rem;
 }
 
+/* Action options (bid vs pawn) */
+.action-option {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.action-option h4 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.pawn-card {
+  border-color: var(--gold);
+  border-width: 1px;
+}
+
+.cant-afford-msg {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gold);
+  margin: 0 0 0.5rem;
+}
+
 .host-bid-form {
   margin: 1rem 0;
   padding: 1rem;
