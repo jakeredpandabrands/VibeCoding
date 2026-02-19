@@ -309,6 +309,16 @@ ul {
   border-radius: 10px;
 }
 
+.bankroll {
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+}
+
+.bankroll strong {
+  color: var(--gold);
+}
+
 .leaderboard-mini h3 {
   font-size: 0.75rem;
   font-weight: 500;

@@ -67,6 +67,7 @@
       </div>
 
       <aside class="leaderboard-mini">
+        <p class="bankroll">Your bankroll: <strong id="my-bankroll">—</strong></p>
         <h3>Standings</h3>
         <ul id="standings"></ul>
       </aside>
@@ -100,7 +101,12 @@
       return div.innerHTML;
     }
 
+    let lastCollectionJson = "";
     function render(state) {
+      // Bankroll (own only)
+      const bankrollEl = document.getElementById("my-bankroll");
+      bankrollEl.textContent = state.my_budget != null ? `$${state.my_budget}` : "—";
+
       // Standings (always visible when we have data)
       const standings = document.getElementById("standings");
       if (state.leaderboard?.length) {
@@ -133,13 +139,19 @@
         } else {
           show(bidForm); hide(submitted);
 
-          // Populate sell dropdown
-          const sel = document.getElementById("sell-select");
+          // Sell dropdown: only rebuild when collection changed (prevents poll from resetting selection)
           const coll = state.my_collection || [];
-          sel.innerHTML = '<option value="">— None —</option>' +
-            coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)} (value ${it.value})</option>`).join("");
+          const collJson = JSON.stringify(coll.map((it) => it.name + it.value));
+          const sel = document.getElementById("sell-select");
+          const prevVal = sel.value;
+          if (collJson !== lastCollectionJson) {
+            lastCollectionJson = collJson;
+            sel.innerHTML = '<option value="">— None —</option>' +
+              coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)} (value ${it.value})</option>`).join("");
+            if (prevVal && coll.length > 0) sel.value = prevVal;
+          }
 
-          if ((state.my_collection || []).length > 0 && sitOutCheck.checked) {
+          if (coll.length > 0 && sitOutCheck.checked) {
             show(sellOption);
           } else {
             hide(sellOption);

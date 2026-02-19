@@ -215,6 +215,9 @@ def public_state(g: dict, player_id: str | None = None) -> dict:
     has_submitted = player_id in g["actions"] if player_id else False
     submitted_count = len(g["actions"])
 
+    # Own bankroll only (never others')
+    my_budget = g["budgets"].get(player_id) if player_id else None
+
     return {
         "game_id": g["id"],
         "phase": g["phase"],
@@ -227,6 +230,7 @@ def public_state(g: dict, player_id: str | None = None) -> dict:
         "has_submitted": has_submitted,
         "resolved": resolved,
         "my_collection": g["collections"].get(player_id, []) if player_id else [],
+        "my_budget": my_budget,
         "all_submitted": all_actions_received(g),
         "submitted_count": submitted_count,
     }
@@ -344,6 +348,10 @@ def api_action(game_id):
             g["actions"][pid] = {"sit_out": False, "bid": amount}
         except (TypeError, ValueError):
             return jsonify({"error": "invalid_bid"}), 400
+
+    # Auto-resolve when all have submitted (no host "Resolve" click needed)
+    if all_actions_received(g):
+        resolve_round(g)
 
     return jsonify({"ok": True})
 

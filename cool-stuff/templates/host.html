@@ -29,16 +29,20 @@
         </div>
         <p id="phase-label"></p>
         <div id="host-bid" class="host-bid-form hidden">
+          <p class="bankroll">Your bankroll: <strong id="host-bankroll">—</strong></p>
           <label for="host-bid-amount">Your bid ($)</label>
           <div class="bid-row">
             <input type="number" id="host-bid-amount" min="0" placeholder="0">
             <label class="checkbox"><input type="checkbox" id="host-sit-out"> Sit out</label>
+            <div id="host-sell-option" class="hidden">
+              <label for="host-sell-select">Sell item (75%)</label>
+              <select id="host-sell-select"></select>
+            </div>
             <button id="host-bid-submit" class="btn-secondary">Submit</button>
           </div>
         </div>
         <p id="submitted-count"></p>
         <div class="host-actions">
-          <button id="btn-resolve" class="btn-secondary hidden">Resolve Round</button>
           <button id="btn-next" class="btn-primary hidden">Next Round</button>
         </div>
       </div>
@@ -88,6 +92,7 @@
         document.getElementById("btn-start").disabled = state.players.length < 2;
       } else if (state.phase === "play") {
         hide(lobby); show(round); hide(reveal); hide(ended);
+        document.getElementById("host-bankroll").textContent = state.my_budget != null ? `$${state.my_budget}` : "—";
         document.getElementById("round-num").textContent = state.current_round + 1;
         document.getElementById("round-total").textContent = state.rounds_total;
         document.getElementById("item-name").textContent = state.current_item?.name || "—";
@@ -96,20 +101,26 @@
           `${state.submitted_count || 0}/${state.players.length} submitted`;
 
         const hostBid = document.getElementById("host-bid");
-        const btnResolve = document.getElementById("btn-resolve");
         const btnNext = document.getElementById("btn-next");
         if (state.has_submitted && HOST_PLAYER_ID) {
           hide(hostBid);
         } else if (HOST_PLAYER_ID) {
           show(hostBid);
+          const sellOpt = document.getElementById("host-sell-option");
+          const sellSel = document.getElementById("host-sell-select");
+          const coll = state.my_collection || [];
+          sellSel.innerHTML = "<option value=''>— None —</option>" +
+            coll.map((it, i) => `<option value="${i}">${escapeHtml(it.name)}</option>`).join("");
+          if (coll.length > 0 && document.getElementById("host-sit-out").checked) {
+            sellOpt.classList.remove("hidden");
+          } else {
+            sellOpt.classList.add("hidden");
+          }
         } else {
           hide(hostBid);
         }
-        if (state.all_submitted) {
-          show(btnResolve); hide(btnNext);
-        } else {
-          hide(btnResolve); hide(btnNext);
-        }
+        // Round auto-resolves when all submit; host just advances when ready
+        hide(btnNext);
       } else if (state.phase === "reveal") {
         hide(lobby); hide(round); show(reveal); hide(ended);
         document.getElementById("reveal-item-name").textContent = state.resolved?.item_name || "";
@@ -132,12 +143,21 @@
       return div.innerHTML;
     }
 
+    document.getElementById("host-sit-out").addEventListener("change", () => {
+      const sellOpt = document.getElementById("host-sell-option");
+      if (document.getElementById("host-sit-out").checked && document.getElementById("host-sell-select").options.length > 1) {
+        sellOpt.classList.remove("hidden");
+      } else {
+        sellOpt.classList.add("hidden");
+      }
+    });
     document.getElementById("host-bid-submit").onclick = async () => {
       if (!HOST_PLAYER_ID) return;
       const sitOut = document.getElementById("host-sit-out").checked;
       const amount = parseInt(document.getElementById("host-bid-amount").value, 10) || 0;
+      const sellVal = document.getElementById("host-sell-select").value;
       const payload = sitOut 
-        ? { player_id: HOST_PLAYER_ID, sit_out: true, sell_item: null }
+        ? { player_id: HOST_PLAYER_ID, sit_out: true, sell_item: sellVal === "" ? null : parseInt(sellVal, 10) }
         : { player_id: HOST_PLAYER_ID, sit_out: false, bid: amount };
       await fetch(`${API}/action`, {
         method: "POST",
@@ -149,11 +169,6 @@
 
     document.getElementById("btn-start").onclick = async () => {
       await fetch(`${API}/advance`, { method: "POST" });
-      poll();
-    };
-
-    document.getElementById("btn-resolve").onclick = async () => {
-      await fetch(`${API}/resolve`, { method: "POST" });
       poll();
     };
 
